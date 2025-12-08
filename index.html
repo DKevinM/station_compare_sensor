@@ -121,14 +121,6 @@
       name: r.name || `Sensor ${r.sensor_index}`
     }));
     
-    // Populate sensor dropdown
-    const sensorDropdown = document.getElementById("sensorDropdown");
-    sensors.forEach(s => {
-      const opt = document.createElement("option");
-      opt.value = s.id;
-      opt.textContent = s.name;
-      sensorDropdown.appendChild(opt);
-    });
 
 
     // --- Load sensor list from Supabase ---
