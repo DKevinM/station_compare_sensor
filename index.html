@@ -88,7 +88,10 @@
     const SUPABASE_ANON_KEY =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjdW5vbmNieWl0ZnNpbHJoeW12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE3Mjk3NDYsImV4cCI6MjA2NzMwNTc0Nn0._z_tqm_5UIBkWfMa7HAJrUOA-0t9vOaBVV48-74esWQ';
 
+    
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const sensorChoices = new Choices(sensorDropdown, { removeItemButton: true });
 
     const sensorDropdown = document.getElementById("sensorDropdown");
     const startEl = document.getElementById("startDate");
@@ -104,6 +107,29 @@
       startEl.valueAsDate = start;
       endEl.valueAsDate   = now;
     }
+
+    // 1B) Load PurpleAir sensor list
+    const { data: sensorData, error: sensorErr } = await supabase
+      .from("sensor_data")
+      .select("sensor_index, name")
+      .order("name", { ascending: true });
+    
+    if (sensorErr) console.error(sensorErr);
+    
+    const sensors = (sensorData || []).map(r => ({
+      id: r.sensor_index,
+      name: r.name || `Sensor ${r.sensor_index}`
+    }));
+    
+    // Populate sensor dropdown
+    const sensorDropdown = document.getElementById("sensorDropdown");
+    sensors.forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s.id;
+      opt.textContent = s.name;
+      sensorDropdown.appendChild(opt);
+    });
+
 
     // --- Load sensor list from Supabase ---
     async function loadSensors() {
