@@ -107,25 +107,39 @@
     const start = new Date(now);
     start.setDate(start.getDate() - daysBack);
 
-    startEl.valueAsDate = start;  // local midnight-ish
+    startEl.valueAsDate = start;
     endEl.valueAsDate   = now;
   }
 
   // --- Load sensor list from Supabase (sensor_readings) ---
   async function loadSensors() {
+    console.log("Loading sensors from Supabase…");
+
     const { data, error } = await supabase
       .from("sensor_readings")
       .select("sensor_index, name")
+      .order("sensor_index", { ascending: true })
       .limit(5000);
+
+    console.log("sensor_readings error:", error);
+    console.log("sensor_readings rows:", data ? data.length : 0);
+    console.log("sensor_readings sample row:", data && data[0]);
 
     if (error) {
       console.error("Error loading sensor list:", error);
+      alert("Supabase error loading sensors – see console");
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      console.warn("No rows returned from sensor_readings for anon key.");
+      alert("No sensors visible in sensor_readings (check RLS/policies for anon).");
       return;
     }
 
     // Deduplicate by sensor_index, keep last non-empty name
     const sensorMap = new Map();
-    (data || []).forEach(row => {
+    data.forEach(row => {
       if (row.sensor_index == null) return;
       const idx  = Number(row.sensor_index);
       const name = row.name && row.name.trim() !== "" ? row.name.trim() : null;
@@ -140,7 +154,9 @@
     const sensors = Array.from(sensorMap.values())
       .sort((a, b) => a.index - b.index);
 
-    // Clear any existing choices and set new ones
+    console.log("Unique sensors after dedupe:", sensors.length);
+
+    // Populate Choices options
     sensorChoices.clearStore();
     sensorChoices.setChoices(
       sensors.map(s => ({
@@ -151,9 +167,6 @@
       'label',
       true
     );
-
-    // Optional: preselect some sensor IDs
-    // sensorChoices.setChoiceByValue(["4327", "297993"]);
 
     // Trigger initial plot
     fetchAndPlot();
@@ -183,7 +196,6 @@
         return;
       }
 
-      // Inclusive end: add 1 day and use < endExclusive
       const endExclusive = new Date(end);
       endExclusive.setDate(endExclusive.getDate() + 1);
 
@@ -265,7 +277,7 @@
         });
       }
 
-      const layout = {
+      Plotly.newPlot("plot", traces, {
         title: "PurpleAir Sensors – PM₂.₅ (corrected)",
         xaxis: { title: "Time", type: "date" },
         yaxis: { title: "PM₂.₅ corrected (µg/m³)" },
@@ -290,9 +302,7 @@
             align: "left"
           }
         ]
-      };
-
-      Plotly.newPlot("plot", traces, layout);
+      });
     } catch (e) {
       console.error("fetchAndPlot failed:", e);
     }
@@ -307,6 +317,7 @@
 
   await loadSensors();
 </script>
+
   
 </body>
 </html>
