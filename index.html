@@ -48,6 +48,12 @@
       margin: 0 0 16px 0;
       font-weight: 600;
     }
+    button {
+      margin-right: 6px;
+      margin-top: 4px;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -61,6 +67,12 @@
     <div>
       <h3>Select Sensors</h3>
       <select id="sensorDropdown" multiple></select>
+
+      <!-- NEW: Quick-select group controls -->
+      <div>
+        <button type="button" id="selectAcaBtn">Select ACA sensors</button>
+        <button type="button" id="clearSensorsBtn">Clear selection</button>
+      </div>
     </div>
 
     <div>
@@ -82,9 +94,15 @@
     // -----------------------------
     // 1. DOM elements
     // -----------------------------
-    const sensorDropdown = document.getElementById("sensorDropdown");
-    const startEl        = document.getElementById("startDate");
-    const endEl          = document.getElementById("endDate");
+    const sensorDropdown   = document.getElementById("sensorDropdown");
+    const startEl          = document.getElementById("startDate");
+    const endEl            = document.getElementById("endDate");
+    const selectAcaBtn     = document.getElementById("selectAcaBtn");
+    const clearSensorsBtn  = document.getElementById("clearSensorsBtn");
+
+    // Keep reference to all sensors + Choices instance
+    let allSensors = [];
+    let sensorChoices = null;
 
     // -----------------------------
     // 2. Supabase client
@@ -157,13 +175,14 @@
         if (!sensorMap.has(idx)) {
           sensorMap.set(idx, { index: idx, name });
         } else if (name) {
-          // overwrite with better name if we see one
           sensorMap.set(idx, { index: idx, name });
         }
       });
 
       const sensors = Array.from(sensorMap.values())
         .sort((a, b) => a.index - b.index);
+
+      allSensors = sensors;  // cache globally
 
       console.log("Unique sensors after dedupe:", sensors.length);
       console.log("First 10 sensors:", sensors.slice(0, 10));
@@ -172,6 +191,7 @@
       sensors.forEach(s => {
         const opt = document.createElement("option");
         opt.value = String(s.index);
+        // Keep label short but informative
         opt.textContent = s.name
           ? `${s.name} (#${s.index})`
           : `Sensor #${s.index}`;
@@ -179,14 +199,10 @@
       });
 
       // Enhance with Choices.js *after* options exist
-      new Choices(sensorDropdown, {
+      sensorChoices = new Choices(sensorDropdown, {
         removeItemButton: true,
         searchPlaceholderValue: "Type to search sensors…"
       });
-
-      // Optionally preselect a couple for convenience
-      // sensorDropdown.value = String(sensors[0].index); // first sensor
-      // sensorDropdown.dispatchEvent(new Event("change"));
 
       // Initial plot
       fetchAndPlot();
@@ -232,7 +248,8 @@
           console.log(`Querying sensor_readings for sensor_index=${sensorIndex}`);
           const { data, error } = await supabase
             .from("sensor_readings")
-            .select("sensor_index, name, recorded_at, pm_corrected, pm_raw, humidity")
+            // ONLY corrected PM now
+            .select("sensor_index, name, recorded_at, pm_corrected")
             .eq("sensor_index", sensorIndex)
             .gte("recorded_at", startISO)
             .lt("recorded_at", endISO)
@@ -258,34 +275,23 @@
 
           data.forEach(row => {
             const pmCorr = row.pm_corrected != null ? Number(row.pm_corrected) : null;
-            const pmRaw  = row.pm_raw != null ? Number(row.pm_raw) : null;
-            const val    = pmCorr != null && !isNaN(pmCorr)
-              ? pmCorr
-              : (pmRaw != null && !isNaN(pmRaw) ? pmRaw : null);
-
-            if (val == null) return;
+            if (pmCorr == null || isNaN(pmCorr)) return;
 
             const ts = new Date(row.recorded_at);
             x.push(ts);
-            y.push(val);
+            y.push(pmCorr);
 
             const local = toEdmontonString(row.recorded_at);
-            const rh = row.humidity != null ? `${Number(row.humidity).toFixed(0)} %` : "n/a";
 
             text.push(
               `${label}<br>` +
-              `PM₂.₅ (corrected): ${val.toFixed(1)} µg/m³<br>` +
-              (pmRaw != null && !isNaN(pmRaw)
-                 ? `PM₂.₅ (raw): ${pmRaw.toFixed(1)} µg/m³<br>`
-                 : ""
-              ) +
-              `RH: ${rh}<br>` +
+              `PM₂.₅ (corrected): ${pmCorr.toFixed(1)} µg/m³<br>` +
               `Time: ${local}`
             );
           });
 
           if (x.length === 0) {
-            console.warn(`All values NaN for sensor ${sensorIndex}`);
+            console.warn(`All corrected values NaN for sensor ${sensorIndex}`);
             continue;
           }
 
@@ -295,7 +301,7 @@
             mode: "lines+markers",
             name: label,
             text,
-            hoverinfo: "x+y+text"
+            hovertemplate: "%{text}<extra></extra>"
           });
         }
 
@@ -312,14 +318,16 @@
           title: "PurpleAir Sensors – PM₂.₅ (corrected)",
           xaxis: { title: "Time", type: "date" },
           yaxis: { title: "PM₂.₅ corrected (µg/m³)" },
-          margin: { t: 80 },
+          margin: { t: 120 },
           hovermode: "x unified",
           legend: {
-            orientation: "horizontal",
+            orientation: "h",
+            xanchor: "left",
+            x: 0,
             yanchor: "bottom",
-            y: -0.3,
-            xanchor: "center",
-            x: 0.5
+            y: 1.08,
+            font: { size: 10 },
+            itemwidth: 40
           },
           annotations: [
             {
@@ -342,13 +350,41 @@
     }
 
     // -----------------------------
-    // 6. Init
+    // 6. Quick-select handlers
+    // -----------------------------
+    function selectAcaSensors() {
+      if (!sensorChoices || !allSensors.length) return;
+
+      // Heuristic: treat any sensor with "ACA" in its name as ACA.
+      // Adjust this filter to match your actual naming convention if needed.
+      const acaIndices = allSensors
+        .filter(s => s.name && s.name.toUpperCase().includes("ACA"))
+        .map(s => String(s.index));
+
+      sensorChoices.removeActiveItems();
+      acaIndices.forEach(idx => {
+        sensorChoices.setChoiceByValue(idx);
+      });
+
+      fetchAndPlot();
+    }
+
+    function clearSensorSelection() {
+      if (!sensorChoices) return;
+      sensorChoices.removeActiveItems();
+      fetchAndPlot();
+    }
+
+    // -----------------------------
+    // 7. Init
     // -----------------------------
     setDefaultDates(7);
 
     startEl.addEventListener("change", fetchAndPlot);
     endEl.addEventListener("change", fetchAndPlot);
     sensorDropdown.addEventListener("change", fetchAndPlot);
+    selectAcaBtn.addEventListener("click", selectAcaSensors);
+    clearSensorsBtn.addEventListener("click", clearSensorSelection);
 
     await loadSensors();
   </script>
