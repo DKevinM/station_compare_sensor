@@ -119,18 +119,7 @@
     }
     
     
-    function selectAcaSensors() {
-      const aca = getAcaSensors();
-      console.log("ACA sensors:", aca);
-      applyGroupSelection(aca);
-    }
-    
-    function selectWcasSensors() {
-      const wcas = getWcasSensors();
-      console.log("WCAS sensors:", wcas);
-      applyGroupSelection(wcas);
-    }
-    
+   
     function clearSensorSelection() {
       if (!sensorChoices) return;
       sensorChoices.removeActiveItems();
