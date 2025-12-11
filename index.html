@@ -118,12 +118,6 @@
         .map(s => String(s.index));
     }
     
-    function applyGroupSelection(indices) {
-      if (!sensorChoices) return;
-      sensorChoices.removeActiveItems();
-      indices.forEach(idx => sensorChoices.setChoiceByValue(idx));
-      fetchAndPlot();
-    }
     
     function selectAcaSensors() {
       const aca = getAcaSensors();
