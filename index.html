@@ -71,6 +71,7 @@
       <!-- NEW: Quick-select group controls -->
       <div>
         <button type="button" id="selectAcaBtn">Select ACA sensors</button>
+        <button type="button" id="selectWcasBtn">Select WCAS sensors</button>
         <button type="button" id="clearSensorsBtn">Clear selection</button>
       </div>
     </div>
@@ -98,11 +99,25 @@
     const startEl          = document.getElementById("startDate");
     const endEl            = document.getElementById("endDate");
     const selectAcaBtn     = document.getElementById("selectAcaBtn");
+    const selectWcasBtn    = document.getElementById("selectWcasBtn"); 
     const clearSensorsBtn  = document.getElementById("clearSensorsBtn");
 
     // Keep reference to all sensors + Choices instance
     let allSensors = [];
     let sensorChoices = null;
+
+    function getAcaSensors() {
+    return allSensors
+      .filter(s => s.name && s.name.toUpperCase().includes("ACA"))
+      .map(s => String(s.index));
+    }
+    
+    function getWcasSensors() {
+    return allSensors
+      .filter(s => s.name && s.name.toUpperCase().includes("WCAS"))
+      .map(s => String(s.index));
+    }
+
 
     // -----------------------------
     // 2. Supabase client
@@ -322,12 +337,12 @@
           hovermode: "x unified",
           legend: {
             orientation: "h",
-            xanchor: "left",
-            x: 0,
-            yanchor: "bottom",
-            y: 1.08,
-            font: { size: 10 },
-            itemwidth: 40
+            xanchor: "center",
+            x: 0.5,
+            yanchor: "top",
+            y: -0.2,          // negative puts it under the x-axis
+            font: { size: 9 },
+            itemwidth: 60
           },
           annotations: [
             {
@@ -352,28 +367,35 @@
     // -----------------------------
     // 6. Quick-select handlers
     // -----------------------------
-    function selectAcaSensors() {
-      if (!sensorChoices || !allSensors.length) return;
-
-      // Heuristic: treat any sensor with "ACA" in its name as ACA.
-      // Adjust this filter to match your actual naming convention if needed.
-      const acaIndices = allSensors
-        .filter(s => s.name && s.name.toUpperCase().includes("ACA"))
-        .map(s => String(s.index));
-
+    function applyGroupSelection(indices) {
+      if (!sensorChoices) return;
       sensorChoices.removeActiveItems();
-      acaIndices.forEach(idx => {
+    
+      indices.forEach(idx => {
         sensorChoices.setChoiceByValue(idx);
       });
-
+    
       fetchAndPlot();
     }
-
+    
+    function selectAcaSensors() {
+      const aca = getAcaSensors();
+      console.log("ACA sensors detected:", aca);
+      applyGroupSelection(aca);
+    }
+    
+    function selectWcasSensors() {
+      const wcas = getWcasSensors();
+      console.log("WCAS sensors detected:", wcas);
+      applyGroupSelection(wcas);
+    }
+    
     function clearSensorSelection() {
       if (!sensorChoices) return;
       sensorChoices.removeActiveItems();
       fetchAndPlot();
     }
+
 
     // -----------------------------
     // 7. Init
@@ -384,6 +406,7 @@
     endEl.addEventListener("change", fetchAndPlot);
     sensorDropdown.addEventListener("change", fetchAndPlot);
     selectAcaBtn.addEventListener("click", selectAcaSensors);
+    selectWcasBtn.addEventListener("click", selectWcasSensors);
     clearSensorsBtn.addEventListener("click", clearSensorSelection);
 
     await loadSensors();
