@@ -107,16 +107,42 @@
     let sensorChoices = null;
 
     function getAcaSensors() {
-    return allSensors
-      .filter(s => s.name && s.name.toUpperCase().includes("ACA"))
-      .map(s => String(s.index));
+      return allSensors
+        .filter(s => s.network === "ACA")
+        .map(s => String(s.index));
     }
     
     function getWcasSensors() {
-    return allSensors
-      .filter(s => s.name && s.name.toUpperCase().includes("WCAS"))
-      .map(s => String(s.index));
+      return allSensors
+        .filter(s => s.network === "WCAS")
+        .map(s => String(s.index));
     }
+    
+    function applyGroupSelection(indices) {
+      if (!sensorChoices) return;
+      sensorChoices.removeActiveItems();
+      indices.forEach(idx => sensorChoices.setChoiceByValue(idx));
+      fetchAndPlot();
+    }
+    
+    function selectAcaSensors() {
+      const aca = getAcaSensors();
+      console.log("ACA sensors:", aca);
+      applyGroupSelection(aca);
+    }
+    
+    function selectWcasSensors() {
+      const wcas = getWcasSensors();
+      console.log("WCAS sensors:", wcas);
+      applyGroupSelection(wcas);
+    }
+    
+    function clearSensorSelection() {
+      if (!sensorChoices) return;
+      sensorChoices.removeActiveItems();
+      fetchAndPlot();
+    }
+
 
 
     // -----------------------------
@@ -157,71 +183,51 @@
     // 4. Load sensor list
     // -----------------------------
     async function loadSensors() {
-      console.log("Loading sensors from sensor_readings…");
-
+      console.log("Loading sensors from purpleair_sensors…");
+    
       const { data, error } = await supabase
-        .from("sensor_readings")
-        .select("sensor_index, name")
-        .not("sensor_index", "is", null)
-        .limit(5000);
-
+        .from("purpleair_sensors")   // <--- use the view
+        .select("sensor_index, name, network")
+        .order("sensor_index", { ascending: true });
+    
       if (error) {
-        console.error("sensor_readings error:", error);
+        console.error("purpleair_sensors error:", error);
         return;
       }
-
-      console.log("sensor_readings rows:", (data || []).length);
+    
       if (!data || data.length === 0) {
-        console.warn("No rows in sensor_readings");
+        console.warn("No rows in purpleair_sensors");
         return;
       }
-
-      // Deduplicate by sensor_index, keeping last non-empty name
-      const sensorMap = new Map();
-      (data || []).forEach(row => {
-        const idxRaw = row.sensor_index;
-        if (idxRaw === null || idxRaw === undefined) return;
-
-        const idx  = Number(idxRaw);
-        if (!Number.isFinite(idx)) return;
-
-        const name = (row.name && String(row.name).trim()) || null;
-
-        if (!sensorMap.has(idx)) {
-          sensorMap.set(idx, { index: idx, name });
-        } else if (name) {
-          sensorMap.set(idx, { index: idx, name });
-        }
-      });
-
-      const sensors = Array.from(sensorMap.values())
-        .sort((a, b) => a.index - b.index);
-
-      allSensors = sensors;  // cache globally
-
-      console.log("Unique sensors after dedupe:", sensors.length);
-      console.log("First 10 sensors:", sensors.slice(0, 10));
-
+    
+      // Store as a simple array
+      allSensors = data.map(row => ({
+        index: row.sensor_index,
+        name: row.name,
+        network: row.network
+      }));
+    
+      console.log("Unique sensors:", allSensors.length);
+    
       // Populate dropdown
-      sensors.forEach(s => {
+      allSensors.forEach(s => {
         const opt = document.createElement("option");
         opt.value = String(s.index);
-        // Keep label short but informative
         opt.textContent = s.name
           ? `${s.name} (#${s.index})`
           : `Sensor #${s.index}`;
         sensorDropdown.appendChild(opt);
       });
-
-      // Enhance with Choices.js *after* options exist
+    
       sensorChoices = new Choices(sensorDropdown, {
         removeItemButton: true,
         searchPlaceholderValue: "Type to search sensors…"
       });
-
+    
       // Initial plot
       fetchAndPlot();
     }
+
 
     // -----------------------------
     // 5. Fetch & plot time series
