@@ -166,19 +166,7 @@
     async function loadSensors() {
       console.log("Loading sensors from purpleair_sensors…");
 
-      const sensorFromURL = getQueryParam("sensor_index");
-      
-      if (sensorFromURL) {
-        // URL param wins: select ONLY that sensor
-        sensorChoices.removeActiveItems();
-        sensorChoices.setChoiceByValue([String(sensorFromURL)]);
-      } else {
-        // No URL param → do your normal defaults (optional)
-        // Example: leave blank, or select ACA group, etc.
-        // applyGroupSelection(getAcaSensors());
-      }
-
-     
+    
       const { data, error } = await supabase
         .from("purpleair_sensors")   // <--- use the view
         .select("sensor_index, name, network")
@@ -217,6 +205,21 @@
         removeItemButton: true,
         searchPlaceholderValue: "Type to search sensors…"
       });
+
+      // ----------------------------------
+      // URL-driven selection (wins)
+      // ----------------------------------
+      const sensorFromURL = getQueryParam("sensor_index");
+      
+      if (sensorFromURL) {
+        sensorChoices.removeActiveItems();
+        sensorChoices.setChoiceByValue([String(sensorFromURL)]);
+      } else {
+        // Optional defaults when opened directly
+        // Example:
+        // applyGroupSelection(getAcaSensors());
+      }
+      
     
       // Initial plot
       fetchAndPlot();
