@@ -92,6 +92,11 @@
   <div id="plot"></div>
 
   <script type="module">
+
+    function getQueryParam(name) {
+      return new URLSearchParams(window.location.search).get(name);
+    }
+    
     // -----------------------------
     // 1. DOM elements
     // -----------------------------
@@ -160,7 +165,20 @@
     // -----------------------------
     async function loadSensors() {
       console.log("Loading sensors from purpleair_sensors…");
-    
+
+      const sensorFromURL = getQueryParam("sensor_index");
+      
+      if (sensorFromURL) {
+        // URL param wins: select ONLY that sensor
+        sensorChoices.removeActiveItems();
+        sensorChoices.setChoiceByValue([String(sensorFromURL)]);
+      } else {
+        // No URL param → do your normal defaults (optional)
+        // Example: leave blank, or select ACA group, etc.
+        // applyGroupSelection(getAcaSensors());
+      }
+
+     
       const { data, error } = await supabase
         .from("purpleair_sensors")   // <--- use the view
         .select("sensor_index, name, network")
